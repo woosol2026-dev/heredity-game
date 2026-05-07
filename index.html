@@ -1,0 +1,683 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>🧬 타마 유전 실험실</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Jua&family=Nanum+Gothic&display=swap" rel="stylesheet" />
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { background: #0F0F1A; font-family: 'Jua', sans-serif; }
+    :root { --font: 'Jua', sans-serif; --font2: 'Nanum Gothic', sans-serif; }
+    @keyframes tamaBounce { from{transform:translateY(0)} to{transform:translateY(-6px)} }
+    @keyframes fadeUp { from{opacity:0;transform:translateY(20px)} to{opacity:1;transform:translateY(0)} }
+    @keyframes pop { 0%{transform:scale(0)} 60%{transform:scale(1.15)} 100%{transform:scale(1)} }
+    @keyframes heartFloat { 0%{opacity:1;transform:translateY(0) scale(1)} 100%{opacity:0;transform:translateY(-60px) scale(1.5)} }
+    @keyframes shine { 0%,100%{opacity:.6} 50%{opacity:1} }
+    @keyframes pulse { 0%,100%{transform:scale(1)} 50%{transform:scale(1.04)} }
+    @keyframes sparkle { 0%{opacity:0;transform:scale(0) rotate(0deg)} 50%{opacity:1;transform:scale(1) rotate(180deg)} 100%{opacity:0;transform:scale(0) rotate(360deg)} }
+    .card-hover { transition: transform .25s, box-shadow .25s; }
+    .card-hover:hover { transform: translateY(-4px) scale(1.02); box-shadow: 0 12px 40px rgba(255,107,157,0.25) !important; }
+    .btn-press:active { transform: scale(.95); }
+    ::-webkit-scrollbar { width: 4px; }
+    ::-webkit-scrollbar-track { background: #1a1a2e; }
+    ::-webkit-scrollbar-thumb { background: #FF6B9D; border-radius: 4px; }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script type="text/babel">
+    const { useState, useEffect } = React;
+
+    /* ═══════════════════════════════════════════
+       GENETICS ENGINE
+    ═══════════════════════════════════════════ */
+    const TRAITS = {
+      bodyColor: {
+        label: "몸 색",
+        dom: { label: "주황", color: "#FF8C42", sym: "C" },
+        rec: { label: "파랑", color: "#74C7EC", sym: "c" },
+      },
+      eyeColor: {
+        label: "눈 색",
+        dom: { label: "갈색", color: "#8B4513", sym: "E" },
+        rec: { label: "파랑", color: "#4A90D9", sym: "e" },
+      },
+      earShape: {
+        label: "귀",
+        dom: { label: "뾰족", color: "#FF6B9D", sym: "A" },
+        rec: { label: "둥근", color: "#C3A6FF", sym: "a" },
+      },
+      spotPattern: {
+        label: "반점",
+        dom: { label: "있음", color: "#888", sym: "S" },
+        rec: { label: "없음", color: "#ccc", sym: "s" },
+      },
+    };
+    const TK = Object.keys(TRAITS);
+
+    function randAllele(sym) {
+      return Math.random() < 0.5 ? sym.toUpperCase() : sym.toLowerCase();
+    }
+    function makeGeno() {
+      return Object.fromEntries(TK.map((k) => {
+        const s = TRAITS[k].dom.sym;
+        const a = randAllele(s), b = randAllele(s);
+        const sorted = [a, b].sort((x) => x === x.toUpperCase() ? -1 : 1).join("");
+        return [k, sorted];
+      }));
+    }
+    function phenotype(geno, k) {
+      const { dom, rec } = TRAITS[k];
+      return geno.includes(dom.sym.toUpperCase()) ? dom : rec;
+    }
+    function crossAllele(gA, gB) {
+      const a = gA[Math.floor(Math.random() * 2)];
+      const b = gB[Math.floor(Math.random() * 2)];
+      return [a, b].sort((x) => x === x.toUpperCase() ? -1 : 1).join("");
+    }
+    function breed(pA, pB) {
+      return Object.fromEntries(TK.map((k) => [k, crossAllele(pA.geno[k], pB.geno[k])]));
+    }
+    function makeTama(name, geno = null) {
+      const g = geno || makeGeno();
+      return {
+        id: Math.random().toString(36).slice(2, 8),
+        name,
+        geno: g,
+        traits: Object.fromEntries(TK.map((k) => [k, phenotype(g[k], k)])),
+        gen: 0,
+      };
+    }
+
+    const NAMES_POOL = ["루루","모모","코코","티티","별이","달이","봄이","솜이","뭉이","콩이","팥이","꿀이","물이","흙이","하늘","바람"];
+
+    /* ═══════════════════════════════════════════
+       TAMAGOTCHI SVG
+    ═══════════════════════════════════════════ */
+    function TamaFace({ tama, size = 90, glow = false, bounce = false, label = true, selected = false }) {
+      const body = tama.traits.bodyColor.color;
+      const eye = tama.traits.eyeColor.color;
+      const pointEar = tama.traits.earShape.label === "뾰족";
+      const hasSpot = tama.traits.spotPattern.label === "있음";
+      const s = size, cx = s / 2, cy = s / 2 + 2;
+
+      return (
+        <div style={{ display:"flex", flexDirection:"column", alignItems:"center", gap:3 }}>
+          <div style={{
+            borderRadius:"50%",
+            padding: selected ? 3 : 0,
+            background: selected ? "linear-gradient(135deg,#FF6B9D,#FFBE0B)" : "transparent",
+            transition:"all .3s",
+            filter: glow ? `drop-shadow(0 0 12px ${body})` : undefined,
+            animation: bounce ? "tamaBounce .5s ease infinite alternate" : undefined,
+          }}>
+            <svg width={s} height={s} viewBox={`0 0 ${s} ${s}`}>
+              {pointEar ? (
+                <>
+                  <polygon points={`${cx-20},${cy-22} ${cx-32},${cy-42} ${cx-8},${cy-26}`} fill={body} />
+                  <polygon points={`${cx+20},${cy-22} ${cx+32},${cy-42} ${cx+8},${cy-26}`} fill={body} />
+                  <polygon points={`${cx-20},${cy-24} ${cx-28},${cy-38} ${cx-10},${cy-28}`} fill="rgba(255,255,255,0.25)" />
+                  <polygon points={`${cx+20},${cy-24} ${cx+28},${cy-38} ${cx+10},${cy-28}`} fill="rgba(255,255,255,0.25)" />
+                </>
+              ) : (
+                <>
+                  <ellipse cx={cx-24} cy={cy-26} rx={11} ry={10} fill={body} />
+                  <ellipse cx={cx+24} cy={cy-26} rx={11} ry={10} fill={body} />
+                  <ellipse cx={cx-24} cy={cy-26} rx={7} ry={6} fill="rgba(255,255,255,0.25)" />
+                  <ellipse cx={cx+24} cy={cy-26} rx={7} ry={6} fill="rgba(255,255,255,0.25)" />
+                </>
+              )}
+              <ellipse cx={cx} cy={cy+2} rx={s*0.38} ry={s*0.35} fill={body} />
+              <ellipse cx={cx} cy={cy+10} rx={s*0.22} ry={s*0.19} fill="rgba(255,255,255,0.28)" />
+              {hasSpot && <>
+                <circle cx={cx-10} cy={cy+14} r={4} fill="rgba(0,0,0,0.15)" />
+                <circle cx={cx+12} cy={cy+16} r={3} fill="rgba(0,0,0,0.12)" />
+              </>}
+              <ellipse cx={cx-13} cy={cy-4} rx={7} ry={8} fill="white" />
+              <ellipse cx={cx+13} cy={cy-4} rx={7} ry={8} fill="white" />
+              <circle cx={cx-13} cy={cy-3} r={4.5} fill={eye} />
+              <circle cx={cx+13} cy={cy-3} r={4.5} fill={eye} />
+              <circle cx={cx-11} cy={cy-5} r={1.5} fill="white" />
+              <circle cx={cx+11} cy={cy-5} r={1.5} fill="white" />
+              <ellipse cx={cx} cy={cy+6} rx={3} ry={2} fill="rgba(0,0,0,0.18)" />
+              <path d={`M${cx-8} ${cy+12} Q${cx} ${cy+19} ${cx+8} ${cy+12}`} stroke="rgba(0,0,0,0.25)" strokeWidth={2} fill="none" strokeLinecap="round" />
+              <ellipse cx={cx-22} cy={cy+9} rx={7} ry={5} fill="rgba(255,150,150,0.3)" />
+              <ellipse cx={cx+22} cy={cy+9} rx={7} ry={5} fill="rgba(255,150,150,0.3)" />
+            </svg>
+          </div>
+          {label && <span style={{ fontSize:11, color:"#999", fontFamily:"var(--font)", fontWeight:700 }}>{tama.name}</span>}
+        </div>
+      );
+    }
+
+    function GeneBadge({ tama, mini = false }) {
+      return (
+        <div style={{ display:"flex", flexWrap:"wrap", gap:3, justifyContent:"center" }}>
+          {TK.map((k) => {
+            const ph = tama.traits[k];
+            return (
+              <div key={k} style={{
+                background: ph.color, color:"white", borderRadius:8,
+                padding: mini ? "1px 6px" : "2px 8px",
+                fontSize: mini ? 9 : 10, fontFamily:"monospace", fontWeight:700,
+                textShadow:"0 1px 2px rgba(0,0,0,0.4)",
+                display:"flex", gap:3, alignItems:"center",
+              }}>
+                <span style={{ opacity:0.85 }}>{TRAITS[k].label}</span>
+                <span>{tama.geno[k]}</span>
+              </div>
+            );
+          })}
+        </div>
+      );
+    }
+
+    function GenHistory({ history }) {
+      if (!history.length) return null;
+      return (
+        <div style={{ textAlign:"center" }}>
+          <div style={{ fontSize:11, color:"#aaa", marginBottom:6 }}>🌳 세대 계보</div>
+          <div style={{ display:"flex", alignItems:"center", gap:4, justifyContent:"center", flexWrap:"wrap" }}>
+            {history.map((t, i) => (
+              <span key={i} style={{ display:"flex", alignItems:"center", gap:4 }}>
+                {i > 0 && <span style={{ color:"#444", fontSize:14 }}>→</span>}
+                <span style={{
+                  fontSize:10, padding:"2px 8px", borderRadius:10,
+                  background: t.traits.bodyColor.color, color:"white",
+                  fontFamily:"monospace", fontWeight:700,
+                  textShadow:"0 1px 2px rgba(0,0,0,0.3)",
+                }}>{t.name} G{t.gen}</span>
+              </span>
+            ))}
+          </div>
+        </div>
+      );
+    }
+
+    /* ═══════════════════════════════════════════
+       STAGES
+    ═══════════════════════════════════════════ */
+    const STAGES = {
+      SELECT_SELF: "SELECT_SELF",
+      BLIND_DATE: "BLIND_DATE",
+      MATCHED: "MATCHED",
+      SELECT_CHILD: "SELECT_CHILD",
+    };
+    const STAGE_ORDER = [STAGES.SELECT_SELF, STAGES.BLIND_DATE, STAGES.MATCHED, STAGES.SELECT_CHILD];
+    const STAGE_LABELS = ["캐릭터 선택", "소개팅", "매칭·생식", "자손 선택"];
+
+    /* ═══════════════════════════════════════════
+       MAIN APP
+    ═══════════════════════════════════════════ */
+    function App() {
+      const [stage, setStage]           = useState(STAGES.SELECT_SELF);
+      const [candidates]                = useState(() => Array.from({length:3}, (_,i) => makeTama(NAMES_POOL[i])));
+      const [myTama, setMyTama]         = useState(null);
+      const [dates, setDates]           = useState([]);
+      const [selectedDateId, setSelId]  = useState(null);
+      const [partner, setPartner]       = useState(null);
+      const [children, setChildren]     = useState([]);
+      const [breedCount, setBreedCount] = useState(0);
+      const [matchAnim, setMatchAnim]   = useState(false);
+      const [breedAnim, setBreedAnim]   = useState(false);
+      const [history, setHistory]       = useState([]);
+      const [gen, setGen]               = useState(0);
+
+      const card   = "rgba(255,255,255,0.06)";
+      const border = "rgba(255,255,255,0.1)";
+
+      function makeDates(currentGen) {
+        return Array.from({length:3}, () => {
+          const t = makeTama(NAMES_POOL[Math.floor(Math.random() * NAMES_POOL.length)]);
+          t.gen = currentGen;
+          return t;
+        });
+      }
+
+      function selectSelf(t) {
+        const me = { ...t, name:"나", gen:0 };
+        setMyTama(me);
+        setHistory([]);
+        setGen(0);
+        setDates(makeDates(0));
+        setSelId(null);
+        setStage(STAGES.BLIND_DATE);
+      }
+
+      function selectDate(d) {
+        setSelId(d.id);
+        setMatchAnim(true);
+        setTimeout(() => {
+          setPartner(d);
+          setChildren([]);
+          setBreedCount(0);
+          setMatchAnim(false);
+          setStage(STAGES.MATCHED);
+        }, 1800);
+      }
+
+      function doBreed() {
+        if (breedCount >= 5 || breedAnim) return;
+        setBreedAnim(true);
+        setTimeout(() => {
+          const childGeno = breed(myTama, partner);
+          const child = makeTama(`아기 ${breedCount+1}호`, childGeno);
+          child.gen = gen + 1;
+          setChildren(c => [...c, child]);
+          setBreedCount(n => n + 1);
+          setBreedAnim(false);
+        }, 900);
+      }
+
+      function goSelectChild() {
+        setStage(STAGES.SELECT_CHILD);
+      }
+
+      function selectChild(child) {
+        const newMe = { ...child, name:"나" };
+        setHistory(h => [...h, myTama]);
+        setMyTama(newMe);
+        setGen(g => g + 1);
+        setPartner(null);
+        setChildren([]);
+        setBreedCount(0);
+        setDates(makeDates(gen + 1));
+        setSelId(null);
+        setStage(STAGES.BLIND_DATE);
+      }
+
+      const stageIdx = STAGE_ORDER.indexOf(stage);
+
+      return (
+        <div style={{ minHeight:"100vh", background:"#0F0F1A", color:"white", fontFamily:"var(--font)", paddingBottom:60 }}>
+
+          {/* ── HEADER ── */}
+          <div style={{
+            background:"rgba(255,255,255,0.04)", borderBottom:"1px solid rgba(255,255,255,0.08)",
+            padding:"12px 16px", display:"flex", alignItems:"center", justifyContent:"space-between",
+            backdropFilter:"blur(10px)", position:"sticky", top:0, zIndex:50,
+          }}>
+            <div>
+              <div style={{ fontSize:17, fontWeight:700 }}>🧬 타마 유전 실험실</div>
+              {gen > 0 && <div style={{ fontSize:10, color:"#FF6B9D", marginTop:1 }}>제 {gen} 세대 진행 중</div>}
+            </div>
+            {myTama && (
+              <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+                <TamaFace tama={myTama} size={34} label={false} />
+                <div>
+                  <div style={{ fontSize:11, color:"#888" }}>나의 타마</div>
+                  <GeneBadge tama={myTama} mini />
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* ── PROGRESS BAR ── */}
+          <div style={{ padding:"10px 16px 0" }}>
+            <div style={{ display:"flex", gap:6 }}>
+              {STAGE_LABELS.map((label, idx) => {
+                const active = stageIdx === idx;
+                const done   = stageIdx > idx;
+                return (
+                  <div key={idx} style={{ flex:1, textAlign:"center" }}>
+                    <div style={{
+                      height:3, borderRadius:2, marginBottom:4,
+                      background: done ? "#FF6B9D" : active ? "linear-gradient(90deg,#FF6B9D,#FFBE0B)" : "rgba(255,255,255,0.08)",
+                      transition:"all .4s",
+                    }} />
+                    <div style={{ fontSize:9, color: active ? "#FFBE0B" : done ? "#FF6B9D" : "#444" }}>{label}</div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          <div style={{ maxWidth:480, margin:"0 auto", padding:"16px 14px 0" }}>
+
+            {/* ══════════════════════════════════
+                STAGE 1 · 캐릭터 선택
+            ══════════════════════════════════ */}
+            {stage === STAGES.SELECT_SELF && (
+              <div style={{ animation:"fadeUp .5s ease" }}>
+                <div style={{ textAlign:"center", marginBottom:22 }}>
+                  <div style={{ fontSize:38, marginBottom:6 }}>🥚</div>
+                  <h2 style={{ fontSize:20, margin:0 }}>나의 캐릭터를 선택하세요!</h2>
+                  <p style={{ color:"#777", fontSize:13, margin:"8px 0 0", fontFamily:"var(--font2)" }}>
+                    아래 3마리 중 하나가 당신의 타마고치가 됩니다
+                  </p>
+                </div>
+                <div style={{ display:"flex", gap:10 }}>
+                  {candidates.map((t, i) => (
+                    <div
+                      key={t.id}
+                      className="card-hover"
+                      onClick={() => selectSelf(t)}
+                      style={{
+                        flex:1, background:card, border:`1px solid ${border}`,
+                        borderRadius:20, padding:"16px 8px", textAlign:"center", cursor:"pointer",
+                        animation:`fadeUp ${.3 + i*.1}s ease`,
+                      }}
+                    >
+                      <TamaFace tama={t} size={78} bounce label={false} />
+                      <div style={{ fontWeight:700, fontSize:14, margin:"8px 0 6px" }}>{t.name}</div>
+                      <GeneBadge tama={t} mini />
+                      <div style={{ marginTop:8, display:"flex", flexDirection:"column", gap:3 }}>
+                        {TK.map((k) => (
+                          <div key={k} style={{ fontSize:10, color:"#777", fontFamily:"var(--font2)" }}>
+                            <span style={{ color:t.traits[k].color }}>■</span> {TRAITS[k].label}: {t.traits[k].label}
+                          </div>
+                        ))}
+                      </div>
+                      <div style={{
+                        marginTop:10, padding:"8px", borderRadius:12,
+                        background:"linear-gradient(135deg,#FF6B9D,#FFBE0B)",
+                        fontSize:12, fontWeight:700, color:"white",
+                      }}>
+                        선택하기 ✨
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* ══════════════════════════════════
+                STAGE 2 · 소개팅
+            ══════════════════════════════════ */}
+            {stage === STAGES.BLIND_DATE && (
+              <div style={{ animation:"fadeUp .5s ease" }}>
+                <div style={{ textAlign:"center", marginBottom:18 }}>
+                  <div style={{ fontSize:30, marginBottom:4 }}>💌</div>
+                  <h2 style={{ fontSize:19, margin:0 }}>소개팅 상대를 골라보세요!</h2>
+                  <p style={{ color:"#777", fontSize:12, margin:"6px 0 0", fontFamily:"var(--font2)" }}>
+                    유전자를 잘 보고 선택하면 원하는 자손이 나와요
+                  </p>
+                </div>
+
+                {/* My tama */}
+                {myTama && (
+                  <div style={{ display:"flex", justifyContent:"center", marginBottom:16 }}>
+                    <div style={{
+                      background:"rgba(255,107,157,0.1)", border:"1px solid rgba(255,107,157,0.3)",
+                      borderRadius:16, padding:"12px 28px", textAlign:"center",
+                    }}>
+                      <div style={{ fontSize:10, color:"#FF6B9D", marginBottom:4 }}>나의 타마 (G{myTama.gen})</div>
+                      <TamaFace tama={myTama} size={68} glow label={false} />
+                      <div style={{ marginTop:6 }}><GeneBadge tama={myTama} mini /></div>
+                    </div>
+                  </div>
+                )}
+
+                <div style={{ textAlign:"center", fontSize:22, color:"#444", marginBottom:14 }}>💕 소개팅 상대</div>
+
+                <div style={{ display:"flex", gap:10 }}>
+                  {dates.map((d, i) => (
+                    <div
+                      key={d.id}
+                      className="card-hover"
+                      onClick={() => !selectedDateId && selectDate(d)}
+                      style={{
+                        flex:1, background: selectedDateId === d.id ? "rgba(255,190,11,0.12)" : card,
+                        border:`1px solid ${selectedDateId === d.id ? "#FFBE0B" : border}`,
+                        borderRadius:20, padding:"14px 8px", textAlign:"center",
+                        cursor: selectedDateId ? "default" : "pointer",
+                        transition:"all .25s", animation:`fadeUp ${.2+i*.1}s ease`,
+                        opacity: selectedDateId && selectedDateId !== d.id ? 0.35 : 1,
+                      }}
+                    >
+                      <TamaFace tama={d} size={70} bounce={selectedDateId===d.id} label={false} />
+                      <div style={{ fontWeight:700, fontSize:13, margin:"6px 0 5px" }}>{d.name}</div>
+                      <GeneBadge tama={d} mini />
+                      <div style={{ marginTop:7, display:"flex", flexDirection:"column", gap:2 }}>
+                        {TK.map((k) => (
+                          <div key={k} style={{ fontSize:9, color:"#666", fontFamily:"var(--font2)" }}>
+                            <span style={{ color:d.traits[k].color }}>●</span> {d.traits[k].label}
+                          </div>
+                        ))}
+                      </div>
+                      <div style={{
+                        marginTop:9, padding:"6px 4px", borderRadius:10, fontSize:11,
+                        background: selectedDateId===d.id ? "rgba(255,190,11,0.25)" : "rgba(255,255,255,0.07)",
+                        color: selectedDateId===d.id ? "#FFBE0B" : "#888",
+                      }}>
+                        {selectedDateId===d.id ? "💛 선택됨" : "선택하기"}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Match overlay animation */}
+                {matchAnim && (
+                  <div style={{
+                    position:"fixed", inset:0, background:"rgba(0,0,0,0.75)", zIndex:200,
+                    display:"flex", alignItems:"center", justifyContent:"center", flexDirection:"column",
+                  }}>
+                    <div style={{ display:"flex", alignItems:"center", gap:24, animation:"pop .5s ease" }}>
+                      <TamaFace tama={myTama} size={92} glow label={false} />
+                      <div style={{ fontSize:42 }}>💕</div>
+                      <TamaFace tama={dates.find(d=>d.id===selectedDateId)||dates[0]} size={92} glow label={false} />
+                    </div>
+                    <div style={{ marginTop:20, fontSize:26, fontWeight:700, color:"#FF6B9D", animation:"shine 1s ease infinite" }}>
+                      💘 매칭 성공! 💘
+                    </div>
+                    <div style={{ display:"flex", gap:8, marginTop:14 }}>
+                      {["💕","💗","💓","💞","💝"].map((h, i) => (
+                        <span key={i} style={{ fontSize:28, animation:`heartFloat ${.5+i*.15}s ease forwards`, display:"inline-block" }}>{h}</span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* ══════════════════════════════════
+                STAGE 3 · 매칭 & 생식
+            ══════════════════════════════════ */}
+            {stage === STAGES.MATCHED && partner && (
+              <div style={{ animation:"fadeUp .5s ease" }}>
+                {/* Couple card */}
+                <div style={{
+                  background:"rgba(255,107,157,0.08)", border:"1px solid rgba(255,107,157,0.25)",
+                  borderRadius:20, padding:16, marginBottom:14, textAlign:"center",
+                }}>
+                  <div style={{ fontSize:11, color:"#FF6B9D", marginBottom:8 }}>💑 매칭된 커플</div>
+                  <div style={{ display:"flex", justifyContent:"center", alignItems:"center", gap:18 }}>
+                    <div>
+                      <TamaFace tama={myTama} size={70} glow label={false} />
+                      <div style={{ fontSize:10, color:"#888", marginTop:4 }}>나 (G{myTama.gen})</div>
+                      <GeneBadge tama={myTama} mini />
+                    </div>
+                    <div style={{ fontSize:28, animation:"pulse 1.5s ease infinite" }}>💕</div>
+                    <div>
+                      <TamaFace tama={partner} size={70} glow label={false} />
+                      <div style={{ fontSize:10, color:"#888", marginTop:4 }}>{partner.name} (G{partner.gen})</div>
+                      <GeneBadge tama={partner} mini />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Breed controls */}
+                <div style={{ textAlign:"center", marginBottom:14 }}>
+                  <div style={{ fontSize:11, color:"#888", marginBottom:8, fontFamily:"var(--font2)" }}>
+                    생식 횟수: <span style={{ color:"#FFBE0B", fontWeight:700 }}>{breedCount} / 5</span>
+                  </div>
+                  <div style={{ display:"flex", gap:7, justifyContent:"center", marginBottom:14 }}>
+                    {Array.from({length:5}).map((_,i) => (
+                      <div key={i} style={{
+                        width:11, height:11, borderRadius:"50%",
+                        background: i < breedCount ? "#FFBE0B" : "rgba(255,255,255,0.12)",
+                        boxShadow: i < breedCount ? "0 0 8px #FFBE0B" : "none",
+                        transition:"all .3s",
+                      }} />
+                    ))}
+                  </div>
+
+                  {breedCount < 5 && (
+                    <button
+                      className="btn-press"
+                      onClick={doBreed}
+                      disabled={breedAnim}
+                      style={{
+                        padding:"13px 38px", borderRadius:24, border:"none", cursor:"pointer",
+                        background: breedAnim ? "rgba(255,107,157,0.4)" : "linear-gradient(135deg,#FF6B9D,#FFBE0B)",
+                        color:"white", fontSize:15, fontFamily:"var(--font)", fontWeight:700,
+                        boxShadow:"0 6px 24px rgba(255,107,157,0.35)", transition:"all .2s",
+                      }}
+                    >
+                      {breedAnim ? "🌀 생식 중..." : "🧬 생식하기"}
+                    </button>
+                  )}
+
+                  {breedAnim && (
+                    <div style={{ marginTop:10, display:"flex", justifyContent:"center", gap:8 }}>
+                      {["✨","🧬","💫","🌟","✨"].map((s, i) => (
+                        <span key={i} style={{ fontSize:20, animation:`sparkle ${.6+i*.1}s ease infinite` }}>{s}</span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* Children grid */}
+                {children.length > 0 && (
+                  <div style={{ marginBottom:14 }}>
+                    <div style={{ fontSize:13, color:"#aaa", textAlign:"center", marginBottom:10, fontFamily:"var(--font2)" }}>
+                      🍼 자손들 ({children.length}마리)
+                    </div>
+                    <div style={{ display:"flex", flexWrap:"wrap", gap:8, justifyContent:"center" }}>
+                      {children.map((child) => (
+                        <div key={child.id} style={{
+                          background:card, border:`1px solid ${border}`,
+                          borderRadius:16, padding:"12px 8px", textAlign:"center",
+                          width:"calc(33.33% - 6px)", animation:"pop .4s ease",
+                        }}>
+                          <TamaFace tama={child} size={56} label={false} />
+                          <div style={{ fontSize:11, fontWeight:700, color:"#ddd", marginTop:4 }}>{child.name}</div>
+                          <div style={{ fontSize:9, color:"#555", marginBottom:4, fontFamily:"var(--font2)" }}>G{child.gen}</div>
+                          <GeneBadge tama={child} mini />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Go to child selection */}
+                {breedCount > 0 && (
+                  <div style={{ textAlign:"center" }}>
+                    <button
+                      onClick={goSelectChild}
+                      style={{
+                        padding:"11px 28px", borderRadius:18, border:"1px solid rgba(192,132,252,0.5)",
+                        background:"rgba(124,58,237,0.18)", color:"#C084FC", cursor:"pointer",
+                        fontSize:13, fontFamily:"var(--font)", transition:"all .2s",
+                      }}
+                    >
+                      자손 선택하러 가기 👑
+                    </button>
+                  </div>
+                )}
+
+                {/* Genetics legend */}
+                <div style={{
+                  marginTop:16, background:"rgba(255,255,255,0.03)", border:`1px solid ${border}`,
+                  borderRadius:14, padding:12,
+                }}>
+                  <div style={{ fontSize:11, color:"#FF6B9D", marginBottom:8, fontWeight:700 }}>🧬 유전 법칙</div>
+                  {TK.map((k) => {
+                    const t = TRAITS[k];
+                    return (
+                      <div key={k} style={{ display:"flex", alignItems:"center", gap:6, fontSize:10, fontFamily:"var(--font2)", marginBottom:4 }}>
+                        <span style={{ color:"#555", width:26 }}>{t.label}</span>
+                        <span style={{ color:t.dom.color }}>■</span>
+                        <span style={{ color:"#666" }}>우성 {t.dom.sym.toUpperCase()} = {t.dom.label}</span>
+                        <span style={{ color:"#333" }}>|</span>
+                        <span style={{ color:t.rec.color }}>■</span>
+                        <span style={{ color:"#666" }}>열성 {t.rec.sym} = {t.rec.label}</span>
+                        <span style={{ marginLeft:"auto", color:"#555", fontFamily:"monospace" }}>
+                          {myTama.geno[k]}×{partner.geno[k]}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* ══════════════════════════════════
+                STAGE 4 · 자손 선택
+            ══════════════════════════════════ */}
+            {stage === STAGES.SELECT_CHILD && (
+              <div style={{ animation:"fadeUp .5s ease" }}>
+                <div style={{ textAlign:"center", marginBottom:20 }}>
+                  <div style={{ fontSize:30, marginBottom:4 }}>👑</div>
+                  <h2 style={{ fontSize:19, margin:0 }}>다음 세대 캐릭터를 선택하세요!</h2>
+                  <p style={{ color:"#777", fontSize:12, margin:"6px 0 0", fontFamily:"var(--font2)" }}>
+                    선택한 자손이 다음 소개팅의 주인공이 됩니다
+                  </p>
+                </div>
+                <div style={{ display:"flex", flexWrap:"wrap", gap:10, justifyContent:"center" }}>
+                  {children.map((child, i) => (
+                    <div
+                      key={child.id}
+                      className="card-hover"
+                      style={{
+                        background:card, border:`1px solid ${border}`,
+                        borderRadius:20, padding:"16px 12px", textAlign:"center",
+                        width:"calc(33.33% - 8px)", animation:`fadeUp ${.2+i*.08}s ease`,
+                        cursor:"pointer",
+                      }}
+                    >
+                      <TamaFace tama={child} size={66} bounce label={false} />
+                      <div style={{ fontSize:12, fontWeight:700, color:"#ddd", marginTop:6 }}>{child.name}</div>
+                      <div style={{ fontSize:9, color:"#666", marginBottom:6, fontFamily:"var(--font2)" }}>G{child.gen}</div>
+                      <GeneBadge tama={child} mini />
+                      <div style={{ marginTop:8, display:"flex", flexDirection:"column", gap:2 }}>
+                        {TK.map((k) => (
+                          <div key={k} style={{ fontSize:9, color:"#666", fontFamily:"var(--font2)" }}>
+                            <span style={{ color:child.traits[k].color }}>●</span> {child.traits[k].label}
+                          </div>
+                        ))}
+                      </div>
+                      <button
+                        onClick={() => selectChild(child)}
+                        style={{
+                          marginTop:10, width:"100%", padding:"8px 4px",
+                          borderRadius:12, border:"none", cursor:"pointer",
+                          background:"linear-gradient(135deg,#7C3AED,#C084FC)",
+                          color:"white", fontSize:11, fontFamily:"var(--font)", fontWeight:700,
+                          boxShadow:"0 4px 14px rgba(124,58,237,0.35)",
+                        }}
+                      >
+                        나로 선택 👑
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Generation history */}
+            {history.length > 0 && (
+              <div style={{
+                marginTop:20, background:card, border:`1px solid ${border}`,
+                borderRadius:16, padding:14,
+              }}>
+                <GenHistory history={history} />
+              </div>
+            )}
+
+          </div>
+        </div>
+      );
+    }
+
+    const root = ReactDOM.createRoot(document.getElementById("root"));
+    root.render(<App />);
+  </script>
+</body>
+</html>
